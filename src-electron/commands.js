@@ -87,68 +87,6 @@ function validateModelConfig(model) {
   return model
 }
 
-// 扫描 KB 根目录下所有 .note 文件，返回匹配 noteId 的文件路径列表
-function findNoteRefFiles(noteId) {
-  const dataDir = getDataDir()
-  if (!dataDir) return []
-  const kbRoot = path.join(dataDir, 'knowledge')
-  if (!fs.existsSync(kbRoot)) return []
-
-  const results = []
-  function walk(dir) {
-    let entries
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
-    } catch (e) {
-      return
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-      } else if (entry.name.endsWith('.note')) {
-        try {
-          const raw = fs.readFileSync(fullPath, 'utf-8')
-          const meta = JSON.parse(raw)
-          if (meta.noteId === noteId) {
-            results.push({ path: fullPath, meta })
-          }
-        } catch (e) {
-          // 损坏的 .note 文件，跳过
-        }
-      }
-    }
-  }
-  walk(kbRoot)
-  return results
-}
-
-// 笔记标题变更时，同步更新关联 .note 文件内 JSON 的 title 字段
-// 文件名使用 noteId 永不变，只需更新内容
-function syncNoteRefOnRename(noteId, newTitle) {
-  const refs = findNoteRefFiles(noteId)
-  for (const ref of refs) {
-    try {
-      const updatedMeta = { ...ref.meta, title: newTitle || '未命名笔记' }
-      fs.writeFileSync(ref.path, JSON.stringify(updatedMeta, null, 2), 'utf-8')
-    } catch (e) {
-      console.error('[Commands] syncNoteRefOnRename error:', e)
-    }
-  }
-}
-
-// 笔记删除时，同步删除关联的 .note 文件
-function syncNoteRefOnDelete(noteId) {
-  const refs = findNoteRefFiles(noteId)
-  for (const ref of refs) {
-    try {
-      fs.unlinkSync(ref.path)
-    } catch (e) {
-      console.error('[Commands] syncNoteRefOnDelete error:', e)
-    }
-  }
-}
-
 export function registerCommands(mainWindow) {
   console.log('[Commands] Starting to register all IPC handlers...')
 
@@ -447,45 +385,6 @@ export function registerCommands(mainWindow) {
   ipcMain.handle('stop_chat', (_event, args) => {
     cancelTokens.cancel(args.requestId)
     return true
-  })
-
-  ipcMain.handle('get_notes', (_event, args) => {
-    return db.getNotes(args?.knowledgeBaseId, args?.notebookId)
-  })
-
-  ipcMain.handle('get_note', (_event, args) => {
-    return db.getNote(args.noteId)
-  })
-
-  ipcMain.handle('create_note', (_event, args) => {
-    return db.createNote(args?.knowledgeBaseId, args?.notebookId, args?.title)
-  })
-
-  ipcMain.handle('import_note', (_event, args) => {
-    return db.importNote(args?.knowledgeBaseId, args?.notebookId, args?.title, args?.content, args?.contentText)
-  })
-
-  ipcMain.handle('update_note', (_event, args) => {
-    const oldNote = db.getNote(args.noteId)
-    const updated = db.updateNote(args.noteId, args.title, args.content, args.contentText, args.notebookId)
-    // 标题变更时同步重命名关联的 .note 文件
-    if (updated && oldNote && oldNote.title !== updated.title) {
-      syncNoteRefOnRename(args.noteId, updated.title)
-    }
-    return updated
-  })
-
-  ipcMain.handle('delete_note', (_event, args) => {
-    const result = db.softDeleteNote(args.noteId)
-    // 笔记删除时同步删除关联的 .note 文件
-    if (result) {
-      syncNoteRefOnDelete(args.noteId)
-    }
-    return result
-  })
-
-  ipcMain.handle('search_notes', (_event, args) => {
-    return db.searchNotes(args.query)
   })
 
   ipcMain.handle('get_schedule_events', () => {

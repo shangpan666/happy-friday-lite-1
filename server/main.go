@@ -71,9 +71,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, use
 	}
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '新对话', mode TEXT NOT NULL DEFAULT 'chat', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '新建笔记', content TEXT NOT NULL DEFAULT '', content_text TEXT NOT NULL DEFAULT '', deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, knowledge_base_id TEXT, notebook_id TEXT, title TEXT NOT NULL DEFAULT '新建笔记', content TEXT NOT NULL DEFAULT '', content_text TEXT NOT NULL DEFAULT '', deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS schedule_events (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '', start_at TEXT NOT NULL DEFAULT '', end_at TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', completed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`)
 	if err != nil {
+		return err
+	}
+	// Existing installations may have the original notes schema. SQLite does
+	// not support IF NOT EXISTS for columns, so each additive migration is
+	// intentionally idempotent by ignoring the duplicate-column error.
+	for _, statement := range []string{
+		"ALTER TABLE notes ADD COLUMN knowledge_base_id TEXT",
+		"ALTER TABLE notes ADD COLUMN notebook_id TEXT",
+	} {
+		if _, migrationErr := a.db.Exec(statement); migrationErr != nil && !strings.Contains(strings.ToLower(migrationErr.Error()), "duplicate column") {
+			return migrationErr
+		}
+	}
+	if _, err = a.db.Exec("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, deleted, updated_at DESC)"); err != nil {
 		return err
 	}
 	var count int
@@ -290,114 +304,6 @@ func (a *App) employeeData(w http.ResponseWriter, r *http.Request) {
 	default:
 		jsonOut(w, 404, map[string]string{"error": "resource not found"})
 	}
-}
-
-func (a *App) notesAPI(w http.ResponseWriter, r *http.Request, uid int64, id string) {
-	if r.Method == http.MethodGet && id == "" {
-		rows, err := a.db.Query("SELECT id,title,content,content_text,created_at,updated_at FROM notes WHERE user_id=? AND deleted=0 ORDER BY updated_at DESC", uid)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		defer rows.Close()
-		out := []map[string]any{}
-		for rows.Next() {
-			var x map[string]any
-			var noteID, title, content, text, created, updated string
-			if rows.Scan(&noteID, &title, &content, &text, &created, &updated) == nil {
-				x = map[string]any{"id": noteID, "title": title, "content": content, "contentText": text, "createdAt": created, "updatedAt": updated}
-				out = append(out, x)
-			}
-		}
-		jsonOut(w, 200, out)
-		return
-	}
-	if r.Method == http.MethodPost && id == "" {
-		var in struct{ Title, Content, ContentText string }
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		id = randomToken()
-		_, err := a.db.Exec("INSERT INTO notes(id,user_id,title,content,content_text,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", id, uid, in.Title, in.Content, in.ContentText, now, now)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		jsonOut(w, 201, map[string]any{"id": id, "title": in.Title, "content": in.Content, "contentText": in.ContentText, "createdAt": now, "updatedAt": now})
-		return
-	}
-	if (r.Method == http.MethodPut || r.Method == http.MethodDelete) && id != "" {
-		if r.Method == http.MethodDelete {
-			res, err := a.db.Exec("UPDATE notes SET deleted=1,updated_at=? WHERE id=? AND user_id=?", time.Now().UTC().Format(time.RFC3339), id, uid)
-			if err != nil {
-				jsonOut(w, 500, map[string]string{"error": err.Error()})
-				return
-			}
-			n, _ := res.RowsAffected()
-			if n == 0 {
-				jsonOut(w, 404, map[string]string{"error": "not found"})
-				return
-			}
-			w.WriteHeader(204)
-			return
-		}
-		var in struct{ Title, Content, ContentText string }
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		res, err := a.db.Exec("UPDATE notes SET title=?,content=?,content_text=?,updated_at=? WHERE id=? AND user_id=? AND deleted=0", in.Title, in.Content, in.ContentText, time.Now().UTC().Format(time.RFC3339), id, uid)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			jsonOut(w, 404, map[string]string{"error": "not found"})
-			return
-		}
-		jsonOut(w, 200, map[string]any{"id": id, "title": in.Title, "content": in.Content, "contentText": in.ContentText})
-		return
-	}
-	if (r.Method == http.MethodPut || r.Method == http.MethodDelete) && id != "" {
-		if r.Method == http.MethodDelete {
-			res, err := a.db.Exec("DELETE FROM schedule_events WHERE id=? AND user_id=?", id, uid)
-			if err != nil {
-				jsonOut(w, 500, map[string]string{"error": err.Error()})
-				return
-			}
-			n, _ := res.RowsAffected()
-			if n == 0 {
-				jsonOut(w, 404, map[string]string{"error": "not found"})
-				return
-			}
-			w.WriteHeader(204)
-			return
-		}
-		var in struct {
-			Title, Start, End, Description string
-			Completed                      bool
-		}
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		res, err := a.db.Exec("UPDATE schedule_events SET title=?,start_at=?,end_at=?,description=?,completed=?,updated_at=? WHERE id=? AND user_id=?", in.Title, in.Start, in.End, in.Description, boolInt(in.Completed), time.Now().UTC().Format(time.RFC3339), id, uid)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			jsonOut(w, 404, map[string]string{"error": "not found"})
-			return
-		}
-		jsonOut(w, 200, map[string]any{"id": id, "title": in.Title, "start": in.Start, "end": in.End, "description": in.Description, "completed": in.Completed})
-		return
-	}
-	w.WriteHeader(405)
 }
 
 func (a *App) sessionsAPI(w http.ResponseWriter, r *http.Request, uid int64, id string) {

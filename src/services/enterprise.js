@@ -58,10 +58,17 @@ export const enterpriseService = {
     localStorage.setItem(TOKEN_KEY, payload.accessToken)
     return payload.user
   },
-  async listNotes() { return this.request('/api/data/notes') },
+  async listNotes(filters = {}) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value)
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    return this.request(`/api/data/notes${suffix}`)
+  },
+  async getNote(id) { return this.request(`/api/data/notes/${encodeURIComponent(id)}`) },
   async createNote(note) { return this.request('/api/data/notes', { method: 'POST', body: JSON.stringify(note) }) },
   async updateNote(id, note) { return this.request(`/api/data/notes/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(note) }) },
   async deleteNote(id) { return this.request(`/api/data/notes/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
+  async searchNotes(query) { return this.listNotes({ q: query }) },
   async listScheduleEvents() { return this.request('/api/data/schedule-events') },
   async createScheduleEvent(event) { return this.request('/api/data/schedule-events', { method: 'POST', body: JSON.stringify(event) }) }
   ,async updateScheduleEvent(id, event) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(event) }) }

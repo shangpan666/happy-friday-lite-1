@@ -377,6 +377,7 @@ import NoteEditor from './NoteEditor.vue';
 import { useNoteStore } from '@/store/modules/note';
 import { useNotebookStore } from '@/store/modules/notebook';
 import { electronService } from '@/services/electron';
+import { enterpriseService } from '@/services/enterprise';
 import { extractPlainText } from '@/utils/text';
 import { clearAllChatSessions } from '@/utils/chatSessionCache';
 import { useTabStore } from '@/store/modules/tabs';
@@ -995,15 +996,14 @@ const moveToNotebook = async (notebookId) => {
 const moveNoteToNotebook = async (noteId, notebookId) => {
   const note = noteStore.notes.find(n => n.id === noteId);
   if (note) {
-    await electronService.invoke('update_note', {
-      noteId: note.id,
+    const updated = await enterpriseService.updateNote(note.id, {
       title: note.title,
       content: note.content,
       contentText: note.contentText,
-      notebookId
+      notebookId,
+      knowledgeBaseId: note.knowledgeBaseId
     });
-    note.notebookId = notebookId;
-    note.updatedAt = new Date().toISOString();
+    if (updated) Object.assign(note, updated);
   }
 };
 
@@ -1013,21 +1013,15 @@ const duplicateNote = async () => {
   const originalNote = noteStore.notes.find(n => n.id === contextMenu.targetNoteId);
   if (!originalNote) return;
 
-  const newNote = await electronService.invoke('create_note', {
+  const newNote = await enterpriseService.createNote({
     knowledgeBaseId: originalNote.knowledgeBaseId,
     notebookId: originalNote.notebookId,
-    title: originalNote.title + t('note.sidebar.copySuffix')
+    title: originalNote.title + t('note.sidebar.copySuffix'),
+    content: originalNote.content,
+    contentText: originalNote.contentText
   });
 
   if (newNote) {
-    await electronService.invoke('update_note', {
-      noteId: newNote.id,
-      title: newNote.title,
-      content: originalNote.content,
-      contentText: originalNote.contentText
-    });
-    newNote.content = originalNote.content;
-    newNote.contentText = originalNote.contentText;
     noteStore.notes.unshift(newNote);
   }
 };
