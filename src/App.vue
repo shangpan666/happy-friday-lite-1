@@ -1,5 +1,6 @@
 <template>
-  <div class="app-container" :class="{ 'is-share-view': isShareView }">
+  <EnterpriseLogin v-if="!authenticated" @authenticated="authenticated = true" />
+  <div v-else class="app-container" :class="{ 'is-share-view': isShareView }">
     <TabBar v-if="!isShareView" />
     <div class="main-body">
       <Sidebar v-if="!isShareView" />
@@ -28,6 +29,8 @@ import { setI18nLanguage } from '@/i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { allMenuConfigs, isElectronEnvironment } from '@/config/menu';
 import { useTheme } from '@/utils/theme';
+import EnterpriseLogin from '@/views/settings/EnterpriseLogin.vue';
+import { enterpriseService } from '@/services/enterprise';
 
 const appStore = useAppStore();
 const tabStore = useTabStore();
@@ -39,6 +42,7 @@ const { currentMode, initTheme, setTheme: applyThemeFromConfig } = useTheme();
 const isShareView = computed(() => route.meta?.share === true || !isElectronEnvironment());
 const isHarnessRoute = computed(() => route.name === 'harness');
 const hasVisitedHarness = ref(false);
+const authenticated = ref(enterpriseService.authenticated);
 
 let unlistenConfig = null;
 

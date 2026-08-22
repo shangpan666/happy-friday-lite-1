@@ -132,8 +132,24 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/admin/users", a.adminUsers)
 	mux.HandleFunc("/api/admin/data", a.adminData)
 	mux.HandleFunc("/api/data/", a.employeeData)
+	mux.HandleFunc("/api/knowledge/search", a.knowledgeSearch)
 	mux.HandleFunc("/", a.adminPage)
 	return logging(cors(mux))
+}
+
+// Vector search is intentionally a separate server boundary. The client keeps source
+// documents locally, while the server stores/searches only the derived vector records.
+// The Zvec worker will implement this endpoint without receiving source files.
+func (a *App) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.currentUser(r); !ok {
+		jsonOut(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	jsonOut(w, http.StatusNotImplemented, map[string]string{"error": "server vector index is not initialized"})
 }
 func (a *App) health(w http.ResponseWriter, _ *http.Request) {
 	jsonOut(w, 200, map[string]any{"ok": true, "service": "happy-friday", "time": time.Now().UTC()})

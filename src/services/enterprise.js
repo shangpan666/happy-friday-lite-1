@@ -15,6 +15,9 @@ export const enterpriseService = {
   get enabled() {
     return !!(this.serverUrl && this.token)
   },
+  get authenticated() {
+    return this.enabled
+  },
   configure(url) {
     const normalized = normalizeUrl(url)
     if (normalized) localStorage.setItem(SERVER_KEY, normalized)
@@ -62,5 +65,8 @@ export const enterpriseService = {
   async listScheduleEvents() { return this.request('/api/data/schedule-events') },
   async createScheduleEvent(event) { return this.request('/api/data/schedule-events', { method: 'POST', body: JSON.stringify(event) }) }
   ,async updateScheduleEvent(id, event) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(event) }) }
-  ,async deleteScheduleEvent(id) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+  ,async deleteScheduleEvent(id) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
+  async searchKnowledge(query, knowledgeBase) {
+    return this.request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query, knowledgeBase }) })
+  }
 }
