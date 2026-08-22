@@ -1,6 +1,4 @@
 const LOCAL_DATA_COMMANDS = new Set([
-  'get_sessions', 'get_sessions_with_stats', 'get_session', 'get_session_messages',
-  'save_message', 'delete_session', 'update_session_title', 'rollback_session',
   'get_notebooks', 'get_notebook', 'create_notebook', 'update_notebook', 'delete_notebook',
   // Chat history is server-owned. Agent, automation and Harness remain local.
   'chat_with_memory', 'chat_without_memory', 'save_chat_history',

@@ -84,5 +84,9 @@ export const enterpriseService = {
   ,async deleteScheduleEvent(id) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
   async searchKnowledge(query, knowledgeBase) {
     return this.request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query, knowledgeBase }) })
-  }
+  },
+  async listSessions() { return this.request('/api/data/sessions') },
+  async getSessionMessages(id) { return this.request(`/api/data/messages/${encodeURIComponent(id)}`) },
+  async updateSessionTitle(id, title) { return this.request(`/api/data/sessions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title }) }) },
+  async deleteSession(id) { return this.request(`/api/data/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
 }

@@ -332,6 +332,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { electronService } from '@/services/electron';
+import { enterpriseService } from '@/services/enterprise';
 import { useNoteStore } from '@/store/modules/note';
 import { marked } from 'marked';
 
@@ -399,9 +400,8 @@ const loadSessions = async () => {
   loading.value = true;
   try {
     const startDate = getMonthsAgoISO(MONTHS_PER_PAGE);
-    const result = await electronService.invoke('get_sessions_with_stats', { startDate });
-    allSessions.value = result?.sessions || [];
-    hasMore.value = !!result?.hasMore;
+    allSessions.value = await enterpriseService.listSessions() || [];
+    hasMore.value = false;
     loadedMonths.value = MONTHS_PER_PAGE;
   } catch (err) {
     console.error('Failed to load sessions:', err);
@@ -421,11 +421,7 @@ const loadMore = async () => {
     const newLoadedMonths = previousMonths + MONTHS_PER_PAGE;
     const newStartDate = getMonthsAgoISO(newLoadedMonths);
     const endDate = getMonthsAgoISO(previousMonths);
-    const result = await electronService.invoke('get_sessions_with_stats', {
-      startDate: newStartDate,
-      endDate
-    });
-    const newSessions = result?.sessions || [];
+    const newSessions = await enterpriseService.listSessions() || [];
     // 合并并去重
     const existingIds = new Set(allSessions.value.map(s => s.id));
     const merged = [...allSessions.value];
@@ -437,7 +433,7 @@ const loadMore = async () => {
     merged.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
     allSessions.value = merged;
     loadedMonths.value = newLoadedMonths;
-    hasMore.value = !!result?.hasMore;
+    hasMore.value = false;
   } catch (err) {
     console.error('Failed to load more sessions:', err);
   } finally {
@@ -596,7 +592,7 @@ const handleRowMenuSaveAsNote = async (session) => {
   showSaveToast(t('history.saveAsNoteToast'));
 
   try {
-    const messages = await electronService.invoke('get_session_messages', { sessionId: session.id });
+    const messages = await enterpriseService.getSessionMessages(session.id);
     if (!messages || messages.length === 0) {
       showSaveToast('暂无对话内容');
       return;
@@ -743,13 +739,13 @@ const openShareModal = async (session) => {
     session
   };
   try {
-    const result = await electronService.invoke('get-share-link', { sessionId: session.id });
-    if (result && result.success && result.url) {
+    const result = { url: `${window.location.origin}${router.resolve({ name: 'friday-chat', params: { sessionId: session.id }, query: { mode: session.mode || 'chat' } }).href}` };
+    if (result.url) {
       shareModal.value.loading = false;
       shareModal.value.url = result.url;
     } else {
       shareModal.value.loading = false;
-      shareModal.value.error = (result && result.error) || t('history.shareError');
+      shareModal.value.error = t('history.shareError');
     }
   } catch (err) {
     console.error('Failed to get share link:', err);
@@ -828,7 +824,7 @@ const handleBatchDelete = async () => {
 const confirmBatchDelete = async () => {
   try {
     for (const id of selectedIds.value) {
-      await electronService.invoke('delete_session', { sessionId: id });
+      await enterpriseService.deleteSession(id);
     }
     allSessions.value = allSessions.value.filter(s => !selectedIds.value.has(s.id));
   } catch (err) {
@@ -899,7 +895,7 @@ const confirmRename = async () => {
   if (!session || !newTitle) return;
 
   try {
-    await electronService.invoke('update_session_title', { sessionId: session.id, title: newTitle });
+    await enterpriseService.updateSessionTitle(session.id, newTitle);
     session.title = newTitle;
   } catch (err) {
     console.error('Failed to rename session:', err);
@@ -933,7 +929,7 @@ const confirmDelete = async () => {
   if (!session) return;
 
   try {
-    await electronService.invoke('delete_session', { sessionId: session.id });
+    await enterpriseService.deleteSession(session.id);
     allSessions.value = allSessions.value.filter(s => s.id !== session.id);
   } catch (err) {
     console.error('Failed to delete session:', err);
@@ -942,20 +938,8 @@ const confirmDelete = async () => {
 };
 
 // 监听会话标题更新事件
-let unlistenTitleUpdate = null;
-
 onMounted(async () => {
   await loadSessions();
-
-  unlistenTitleUpdate = electronService.listen('session-title-updated', (event) => {
-    const data = event.payload;
-    if (data && data.sessionId) {
-      const session = allSessions.value.find(s => s.id === data.sessionId);
-      if (session) {
-        session.title = data.title;
-      }
-    }
-  });
 
   // 点击外部关闭下拉菜单
   document.addEventListener('click', handleGlobalClick);
@@ -968,9 +952,6 @@ const handleGlobalClick = (e) => {
 };
 
 onUnmounted(() => {
-  if (unlistenTitleUpdate) {
-    unlistenTitleUpdate();
-  }
   document.removeEventListener('click', handleGlobalClick);
 });
 </script>

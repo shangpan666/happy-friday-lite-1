@@ -298,103 +298,6 @@ func (a *App) employeeData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *App) sessionsAPI(w http.ResponseWriter, r *http.Request, uid int64, id string) {
-	if r.Method == http.MethodGet {
-		if id != "" {
-			var title, mode, created, updated string
-			err := a.db.QueryRow("SELECT title,mode,created_at,updated_at FROM sessions WHERE id=? AND user_id=?", id, uid).Scan(&title, &mode, &created, &updated)
-			if err != nil {
-				jsonOut(w, 404, map[string]string{"error": "not found"})
-				return
-			}
-			jsonOut(w, 200, map[string]any{"id": id, "title": title, "mode": mode, "createdAt": created, "updatedAt": updated})
-			return
-		}
-		rows, err := a.db.Query("SELECT id,title,mode,created_at,updated_at FROM sessions WHERE user_id=? ORDER BY updated_at DESC", uid)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		defer rows.Close()
-		out := []map[string]any{}
-		for rows.Next() {
-			var sid, title, mode, created, updated string
-			if rows.Scan(&sid, &title, &mode, &created, &updated) == nil {
-				out = append(out, map[string]any{"id": sid, "title": title, "mode": mode, "createdAt": created, "updatedAt": updated})
-			}
-		}
-		jsonOut(w, 200, out)
-		return
-	}
-	if r.Method == http.MethodPost && id == "" {
-		var in struct{ Title, Mode string }
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		if in.Mode == "" {
-			in.Mode = "chat"
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		id = randomToken()
-		_, err := a.db.Exec("INSERT INTO sessions(id,user_id,title,mode,created_at,updated_at) VALUES(?,?,?,?,?,?)", id, uid, in.Title, in.Mode, now, now)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		jsonOut(w, 201, map[string]any{"id": id, "title": in.Title, "mode": in.Mode, "createdAt": now, "updatedAt": now})
-		return
-	}
-	w.WriteHeader(405)
-}
-
-func (a *App) messagesAPI(w http.ResponseWriter, r *http.Request, uid int64, sessionID string) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost || sessionID == "" {
-		w.WriteHeader(405)
-		return
-	}
-	var exists int
-	if a.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=? AND user_id=?", sessionID, uid).Scan(&exists) != nil || exists == 0 {
-		jsonOut(w, 404, map[string]string{"error": "session not found"})
-		return
-	}
-	if r.Method == http.MethodPost {
-		var in struct {
-			Role, Content string
-			Metadata      any
-		}
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		meta, _ := json.Marshal(in.Metadata)
-		res, err := a.db.Exec("INSERT INTO messages(session_id,user_id,role,content,metadata,created_at) VALUES(?,?,?,?,?,?)", sessionID, uid, in.Role, in.Content, string(meta), now)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		mid, _ := res.LastInsertId()
-		jsonOut(w, 201, map[string]any{"id": mid, "sessionId": sessionID, "role": in.Role, "content": in.Content, "createdAt": now})
-		return
-	}
-	rows, err := a.db.Query("SELECT id,role,content,metadata,created_at FROM messages WHERE session_id=? AND user_id=? ORDER BY id", sessionID, uid)
-	if err != nil {
-		jsonOut(w, 500, map[string]string{"error": err.Error()})
-		return
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var mid int64
-		var role, content, meta, created string
-		if rows.Scan(&mid, &role, &content, &meta, &created) == nil {
-			out = append(out, map[string]any{"id": mid, "role": role, "content": content, "metadata": meta, "createdAt": created})
-		}
-	}
-	jsonOut(w, 200, out)
-}
-
 func boolInt(v bool) int {
 	if v {
 		return 1
@@ -439,6 +342,7 @@ func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(204)
 			return
