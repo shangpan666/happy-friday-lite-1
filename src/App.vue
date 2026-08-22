@@ -108,6 +108,7 @@ watch(
 );
 
 onMounted(async () => {
+  window.addEventListener('happy-friday-auth-changed', onAuthChanged);
   initTheme();
 
   if (isElectronEnvironment()) {
@@ -167,11 +168,19 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('happy-friday-auth-changed', onAuthChanged);
   if (unlistenConfig) {
     unlistenConfig();
     unlistenConfig = null;
   }
 });
+
+function onAuthChanged(event) {
+  authenticated.value = event.detail?.authenticated === true;
+  if (!authenticated.value && route.meta?.share !== true) {
+    router.replace('/friday');
+  }
+}
 </script>
 
 <style scoped>

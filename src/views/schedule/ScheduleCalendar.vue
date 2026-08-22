@@ -1005,7 +1005,11 @@ function openCreateModal(startDate, endDate, startTime, endTime, allDay) {
 }
 
 async function onModalSave(eventData) {
-  await scheduleStore.addEvent(eventData);
+  try {
+    await scheduleStore.addEvent(eventData);
+  } catch (error) {
+    console.error('Failed to save schedule event:', error);
+  }
 }
 
 function openAIAssistant() {

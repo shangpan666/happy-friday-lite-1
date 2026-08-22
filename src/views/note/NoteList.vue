@@ -378,7 +378,7 @@ import { useNoteStore } from '@/store/modules/note';
 import { useNotebookStore } from '@/store/modules/notebook';
 import { electronService } from '@/services/electron';
 import { enterpriseService } from '@/services/enterprise';
-import { extractPlainText } from '@/utils/text';
+import { extractPlainText, extractNoteTitle } from '@/utils/text';
 import { clearAllChatSessions } from '@/utils/chatSessionCache';
 import { useTabStore } from '@/store/modules/tabs';
 import { marked } from 'marked';
@@ -586,7 +586,13 @@ const selectNote = (id) => {
 const createNewNote = async () => {
   newNoteMenuVisible.value = false;
   const notebookId = currentFolder.value !== 'all' ? currentFolder.value : null;
-  const note = await noteStore.createNote(null, null, notebookId);
+  let note;
+  try {
+    note = await noteStore.createNote(null, null, notebookId);
+  } catch (error) {
+    console.error('Failed to create note:', error);
+    return;
+  }
   if (!note) {
     console.error('Failed to create note: Electron API not available or create_note returned null');
     return;
@@ -729,8 +735,7 @@ const onEditorChange = (content) => {
   if (!note) return;
 
   const plainText = extractPlainText(content);
-  const firstLine = (plainText.split('\n').find(line => line.trim() !== '') || '').trim();
-  const title = firstLine ? (firstLine.length > 20 ? firstLine.substring(0, 20) : firstLine) : t('note.newNote');
+  const title = extractNoteTitle(content, t('note.newNote'));
   const contentText = plainText.replace(/\s+/g, ' ').trim();
 
   noteStore.scheduleSave(note.id, title, content, contentText);
@@ -1027,14 +1032,18 @@ const duplicateNote = async () => {
 };
 
 const handleAction = async (action) => {
-  if (action === 'delete' && contextMenu.targetNoteId) {
-    await noteStore.deleteNote(contextMenu.targetNoteId);
-  } else if (action === 'addToKnowledge') {
-    // 暂未实现
-  } else if (action === 'createNewNotebook') {
-    openCreateNotebookDialog();
-  } else if (action === 'duplicate') {
-    await duplicateNote();
+  try {
+    if (action === 'delete' && contextMenu.targetNoteId) {
+      await noteStore.deleteNote(contextMenu.targetNoteId);
+    } else if (action === 'addToKnowledge') {
+      // 暂未实现
+    } else if (action === 'createNewNotebook') {
+      openCreateNotebookDialog();
+    } else if (action === 'duplicate') {
+      await duplicateNote();
+    }
+  } catch (error) {
+    console.error('Note action failed:', error);
   }
   hideContextMenu();
 };

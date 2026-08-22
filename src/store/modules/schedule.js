@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia'
-import { electronService } from '@/services/electron'
 import { enterpriseService } from '@/services/enterprise'
 
 // 马卡龙色系：每色相仅保留一个，完成/未完成通过透明度区分深浅
@@ -47,11 +46,7 @@ export const useScheduleStore = defineStore('schedule', {
     async loadEvents() {
       this.loading = true
       try {
-        if (enterpriseService.enabled) {
-          this.events = await enterpriseService.listScheduleEvents() || []
-          return
-        }
-        this.events = await electronService.invoke('get_schedule_events') || []
+        this.events = await enterpriseService.listScheduleEvents() || []
       } catch (e) {
         console.error('Failed to load schedule events:', e)
         this.events = []
@@ -62,27 +57,7 @@ export const useScheduleStore = defineStore('schedule', {
 
     async addEvent(event) {
       try {
-        if (enterpriseService.enabled) {
-          const newEvent = await enterpriseService.createScheduleEvent({
-            title: event.title, start: event.start, end: event.end,
-            description: event.description, completed: event.completed
-          })
-          this.events.push(newEvent)
-          return newEvent
-        }
-        const newEvent = await electronService.invoke('create_schedule_event', {
-          title: event.title,
-          startDate: event.start,
-          endDate: event.end,
-          startTime: event.startTime,
-          endTime: event.endTime,
-          allDay: event.allDay,
-          description: event.description,
-          color: event.color,
-          reminder: event.reminder,
-          completed: event.completed,
-          priority: event.priority
-        })
+        const newEvent = await enterpriseService.createScheduleEvent(event)
         this.events.push(newEvent)
         return newEvent
       } catch (e) {
@@ -97,33 +72,9 @@ export const useScheduleStore = defineStore('schedule', {
 
       const merged = { ...existing, ...updates }
       try {
-        if (enterpriseService.enabled) {
-          const updated = await enterpriseService.updateScheduleEvent(id, {
-            title: merged.title, start: merged.start, end: merged.end,
-            description: merged.description, completed: merged.completed
-          })
-          const idx = this.events.findIndex(e => e.id === id)
-          if (idx >= 0) this.events[idx] = { ...this.events[idx], ...updated, ...updates }
-          return
-        }
-        await electronService.invoke('update_schedule_event', {
-          eventId: id,
-          title: merged.title,
-          startDate: merged.start,
-          endDate: merged.end,
-          startTime: merged.startTime,
-          endTime: merged.endTime,
-          allDay: merged.allDay,
-          description: merged.description,
-          color: merged.color,
-          reminder: merged.reminder,
-          completed: merged.completed,
-          priority: merged.priority
-        })
+        const updated = await enterpriseService.updateScheduleEvent(id, merged)
         const idx = this.events.findIndex(e => e.id === id)
-        if (idx >= 0) {
-          this.events[idx] = { ...this.events[idx], ...updates }
-        }
+        if (idx >= 0) this.events[idx] = { ...this.events[idx], ...updated, ...updates }
       } catch (e) {
         console.error('Failed to update schedule event:', e)
         throw e
@@ -132,12 +83,7 @@ export const useScheduleStore = defineStore('schedule', {
 
     async removeEvent(id) {
       try {
-        if (enterpriseService.enabled) {
-          await enterpriseService.deleteScheduleEvent(id)
-          this.events = this.events.filter(e => e.id !== id)
-          return
-        }
-        await electronService.invoke('delete_schedule_event', { eventId: id })
+        await enterpriseService.deleteScheduleEvent(id)
         this.events = this.events.filter(e => e.id !== id)
       } catch (e) {
         console.error('Failed to delete schedule event:', e)

@@ -73,7 +73,7 @@ import { useAppStore } from '@/store';
 import { useNoteStore } from '@/store/modules/note';
 import { isElectronEnvironment } from '@/config/menu';
 import NoteEditor from './NoteEditor.vue';
-import { extractPlainText } from '@/utils/text';
+import { extractPlainText, extractNoteTitle } from '@/utils/text';
 
 const route = useRoute();
 const router = useRouter();
@@ -99,8 +99,7 @@ const onEditorChange = (content) => {
   const plainText = extractPlainText(content);
   const normalizedText = plainText.replace(/\s+/g, ' ').trim();
 
-  const firstLine = (plainText.split('\n').find(line => line.trim() !== '') || '').trim();
-  noteTitle.value = firstLine ? (firstLine.length > 20 ? firstLine.substring(0, 20) : firstLine) : t('note.newNote');
+  noteTitle.value = extractNoteTitle(content, t('note.newNote'));
 
   updateStats(normalizedText);
   isSaved.value = false;
@@ -158,7 +157,12 @@ const handleDelete = async () => {
   moreMenuVisible.value = false;
   const id = noteId.value;
   if (id) {
-    await noteStore.deleteNote(id);
+    try {
+      await noteStore.deleteNote(id);
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      return;
+    }
   }
   router.push({ name: 'note' });
 };

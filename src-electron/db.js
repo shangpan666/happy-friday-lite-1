@@ -142,32 +142,6 @@ async function initDatabase() {
     );
   `)
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS schedule_events (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL DEFAULT '',
-      start TEXT NOT NULL DEFAULT '',
-      end TEXT NOT NULL DEFAULT '',
-      startTime TEXT NOT NULL DEFAULT '',
-      endTime TEXT NOT NULL DEFAULT '',
-      allDay INTEGER NOT NULL DEFAULT 0,
-      description TEXT NOT NULL DEFAULT '',
-      color TEXT NOT NULL DEFAULT '#60a5fa',
-      reminder INTEGER NOT NULL DEFAULT 0,
-      completed INTEGER NOT NULL DEFAULT 0,
-      priority TEXT NOT NULL DEFAULT 'important',
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-  `)
-
-  // 迁移：为旧版 schedule_events 表补充 priority 列（已存在则忽略）
-  try {
-    db.run("ALTER TABLE schedule_events ADD COLUMN priority TEXT NOT NULL DEFAULT 'important'")
-  } catch (_e) {
-    // 列已存在，忽略
-  }
-
   // 迁移：为 messages 表补充 metadata 列，存储 Agent 模式的工具调用时间线等附加数据
   try {
     db.run('ALTER TABLE messages ADD COLUMN metadata TEXT')
@@ -312,8 +286,6 @@ async function initDatabase() {
   db.run('CREATE INDEX IF NOT EXISTS idx_notes_knowledgeBaseId ON notes(knowledgeBaseId)')
   db.run('CREATE INDEX IF NOT EXISTS idx_notes_notebookId ON notes(notebookId)')
   db.run('CREATE INDEX IF NOT EXISTS idx_notes_isDeleted ON notes(isDeleted)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_schedule_events_start ON schedule_events(start)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_schedule_events_end ON schedule_events(end)')
   db.run('CREATE INDEX IF NOT EXISTS idx_file_status_kb_type ON file_status(kb_type)')
   db.run('CREATE INDEX IF NOT EXISTS idx_file_status_index_status ON file_status(index_status)')
   db.run('CREATE INDEX IF NOT EXISTS idx_parent_docs_doc_id ON parent_docs(doc_id)')
@@ -381,13 +353,6 @@ async function migrateFromJson() {
     )
   })
 
-  migrateArray('schedule_events.json', (e) => {
-    db.run(
-      'INSERT OR IGNORE INTO schedule_events (id, title, start, end, startTime, endTime, allDay, description, color, reminder, completed, priority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [e.id, e.title, e.start, e.end, e.startTime, e.endTime, e.allDay ? 1 : 0, e.description, e.color, e.reminder ? 1 : 0, e.completed ? 1 : 0, e.priority || 'important', e.createdAt, e.updatedAt]
-    )
-  })
-
   saveDb()
   fs.writeFileSync(migratedFlag, new Date().toISOString())
 }
@@ -421,15 +386,6 @@ export function closeDb() {
     db.close()
     db = null
   }
-}
-
-function normalizeEvent(row) {
-  if (!row) return row
-  row.allDay = !!row.allDay
-  row.reminder = !!row.reminder
-  row.completed = !!row.completed
-  if (!row.priority) row.priority = 'important'
-  return row
 }
 
 function normalizeNote(row) {
@@ -705,96 +661,6 @@ export function searchNotes(query) {
     "SELECT * FROM notes WHERE isDeleted = 0 AND (LOWER(title) LIKE ? OR LOWER(contentText) LIKE ?)",
     [q, q]
   ).map(normalizeNote)
-}
-
-export function getScheduleEvents() {
-  return queryAll(
-    'SELECT * FROM schedule_events ORDER BY start ASC, startTime ASC'
-  ).map(normalizeEvent)
-}
-
-export function getScheduleEventsByDateRange(start, end) {
-  return queryAll(
-    'SELECT * FROM schedule_events WHERE start <= ? AND end >= ? ORDER BY start ASC, startTime ASC',
-    [end, start]
-  ).map(normalizeEvent)
-}
-
-export function getScheduleEvent(eventId) {
-  return normalizeEvent(queryOne(
-    'SELECT * FROM schedule_events WHERE id = ?',
-    [eventId]
-  ))
-}
-
-export function createScheduleEvent(args) {
-  const now = nowISO()
-  const id = generateId()
-  const priority = args.priority || 'important'
-  db.run(
-    'INSERT INTO schedule_events (id, title, start, end, startTime, endTime, allDay, description, color, reminder, completed, priority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [
-      id, args.title || '', args.startDate || '', args.endDate || '',
-      args.startTime || '', args.endTime || '', args.allDay ? 1 : 0,
-      args.description || '', args.color || '#60a5fa', args.reminder ? 1 : 0,
-      args.completed ? 1 : 0, priority, now, now
-    ]
-  )
-  saveDb()
-  return {
-    id,
-    title: args.title || '',
-    start: args.startDate || '',
-    end: args.endDate || '',
-    startTime: args.startTime || '',
-    endTime: args.endTime || '',
-    allDay: args.allDay || false,
-    description: args.description || '',
-    color: args.color || '#60a5fa',
-    reminder: args.reminder || false,
-    completed: args.completed || false,
-    priority,
-    createdAt: now,
-    updatedAt: now
-  }
-}
-
-export function updateScheduleEvent(eventId, args) {
-  const existing = queryOne('SELECT * FROM schedule_events WHERE id = ?', [eventId])
-  if (!existing) return null
-
-  const fields = []
-  const values = []
-
-  if (args.title !== undefined) { fields.push('title = ?'); values.push(args.title) }
-  if (args.startDate !== undefined) { fields.push('start = ?'); values.push(args.startDate) }
-  if (args.endDate !== undefined) { fields.push('end = ?'); values.push(args.endDate) }
-  if (args.startTime !== undefined) { fields.push('startTime = ?'); values.push(args.startTime) }
-  if (args.endTime !== undefined) { fields.push('endTime = ?'); values.push(args.endTime) }
-  if (args.allDay !== undefined) { fields.push('allDay = ?'); values.push(args.allDay ? 1 : 0) }
-  if (args.description !== undefined) { fields.push('description = ?'); values.push(args.description) }
-  if (args.color !== undefined) { fields.push('color = ?'); values.push(args.color) }
-  if (args.reminder !== undefined) { fields.push('reminder = ?'); values.push(args.reminder ? 1 : 0) }
-  if (args.completed !== undefined) { fields.push('completed = ?'); values.push(args.completed ? 1 : 0) }
-  if (args.priority !== undefined) { fields.push('priority = ?'); values.push(args.priority) }
-
-  if (fields.length > 0) {
-    fields.push('updatedAt = ?')
-    values.push(nowISO())
-    values.push(eventId)
-    db.run(
-      `UPDATE schedule_events SET ${fields.join(', ')} WHERE id = ?`,
-      values
-    )
-    saveDb()
-  }
-
-  return normalizeEvent(queryOne('SELECT * FROM schedule_events WHERE id = ?', [eventId]))
-}
-
-export function deleteScheduleEvent(eventId) {
-  db.run('DELETE FROM schedule_events WHERE id = ?', [eventId])
-  saveDb()
 }
 
 // ========== Automation tasks ==========

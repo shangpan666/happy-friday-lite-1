@@ -72,22 +72,14 @@ CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, use
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '新对话', mode TEXT NOT NULL DEFAULT 'chat', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, knowledge_base_id TEXT, notebook_id TEXT, title TEXT NOT NULL DEFAULT '新建笔记', content TEXT NOT NULL DEFAULT '', content_text TEXT NOT NULL DEFAULT '', deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS schedule_events (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '', start_at TEXT NOT NULL DEFAULT '', end_at TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', completed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`)
+CREATE TABLE IF NOT EXISTS schedule_events (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT '', start_at TEXT NOT NULL DEFAULT '', end_at TEXT NOT NULL DEFAULT '', start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', all_day INTEGER NOT NULL DEFAULT 0, description TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#60a5fa', reminder INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, priority TEXT NOT NULL DEFAULT 'important', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`)
 	if err != nil {
 		return err
 	}
-	// Existing installations may have the original notes schema. SQLite does
-	// not support IF NOT EXISTS for columns, so each additive migration is
-	// intentionally idempotent by ignoring the duplicate-column error.
-	for _, statement := range []string{
-		"ALTER TABLE notes ADD COLUMN knowledge_base_id TEXT",
-		"ALTER TABLE notes ADD COLUMN notebook_id TEXT",
-	} {
-		if _, migrationErr := a.db.Exec(statement); migrationErr != nil && !strings.Contains(strings.ToLower(migrationErr.Error()), "duplicate column") {
-			return migrationErr
-		}
-	}
 	if _, err = a.db.Exec("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, deleted, updated_at DESC)"); err != nil {
+		return err
+	}
+	if _, err = a.db.Exec("CREATE INDEX IF NOT EXISTS idx_schedule_events_user_start ON schedule_events(user_id, start_at, start_time)"); err != nil {
 		return err
 	}
 	var count int
@@ -403,60 +395,6 @@ func (a *App) messagesAPI(w http.ResponseWriter, r *http.Request, uid int64, ses
 	jsonOut(w, 200, out)
 }
 
-func (a *App) scheduleAPI(w http.ResponseWriter, r *http.Request, uid int64, id string) {
-	if r.Method == http.MethodGet {
-		q := "SELECT id,title,start_at,end_at,description,completed,created_at,updated_at FROM schedule_events WHERE user_id=?"
-		args := []any{uid}
-		if id != "" {
-			q += " AND id=?"
-			args = append(args, id)
-		}
-		rows, err := a.db.Query(q, args...)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		defer rows.Close()
-		out := []map[string]any{}
-		for rows.Next() {
-			var eid, title, start, end, desc, created, updated string
-			var completed int
-			if rows.Scan(&eid, &title, &start, &end, &desc, &completed, &created, &updated) == nil {
-				out = append(out, map[string]any{"id": eid, "title": title, "start": start, "end": end, "description": desc, "completed": completed != 0, "createdAt": created, "updatedAt": updated})
-			}
-		}
-		if id != "" {
-			if len(out) == 0 {
-				jsonOut(w, 404, map[string]string{"error": "not found"})
-			} else {
-				jsonOut(w, 200, out[0])
-			}
-		} else {
-			jsonOut(w, 200, out)
-		}
-		return
-	}
-	if r.Method == http.MethodPost && id == "" {
-		var in struct {
-			Title, Start, End, Description string
-			Completed                      bool
-		}
-		if !readJSON(r, &in) {
-			jsonOut(w, 400, map[string]string{"error": "invalid body"})
-			return
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		id = randomToken()
-		_, err := a.db.Exec("INSERT INTO schedule_events(id,user_id,title,start_at,end_at,description,completed,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)", id, uid, in.Title, in.Start, in.End, in.Description, boolInt(in.Completed), now, now)
-		if err != nil {
-			jsonOut(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		jsonOut(w, 201, map[string]any{"id": id, "title": in.Title, "start": in.Start, "end": in.End, "description": in.Description, "completed": in.Completed, "createdAt": now, "updatedAt": now})
-		return
-	}
-	w.WriteHeader(405)
-}
 func boolInt(v bool) int {
 	if v {
 		return 1

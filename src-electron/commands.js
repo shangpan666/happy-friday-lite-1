@@ -387,31 +387,6 @@ export function registerCommands(mainWindow) {
     return true
   })
 
-  ipcMain.handle('get_schedule_events', () => {
-    return db.getScheduleEvents()
-  })
-
-  ipcMain.handle('get_schedule_events_by_date_range', (_event, args) => {
-    return db.getScheduleEventsByDateRange(args.start, args.end)
-  })
-
-  ipcMain.handle('get_schedule_event', (_event, args) => {
-    return db.getScheduleEvent(args.eventId)
-  })
-
-  ipcMain.handle('create_schedule_event', (_event, args) => {
-    return db.createScheduleEvent(args)
-  })
-
-  ipcMain.handle('update_schedule_event', (_event, args) => {
-    return db.updateScheduleEvent(args.eventId, args)
-  })
-
-  ipcMain.handle('delete_schedule_event', (_event, args) => {
-    db.deleteScheduleEvent(args.eventId)
-    return true
-  })
-
   ipcMain.handle('get_notebooks', () => {
     console.log('[Commands] get_notebooks called')
     return db.getNotebooks()

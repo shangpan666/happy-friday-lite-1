@@ -1,5 +1,6 @@
 const SERVER_KEY = 'happy-friday.server-url'
 const TOKEN_KEY = 'happy-friday.access-token'
+const AUTH_EVENT = 'happy-friday-auth-changed'
 
 function normalizeUrl(value) {
   return String(value || '').trim().replace(/\/$/, '')
@@ -26,12 +27,19 @@ export const enterpriseService = {
   },
   logout() {
     localStorage.removeItem(TOKEN_KEY)
+    window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { authenticated: false } }))
   },
   async request(path, options = {}) {
     if (!this.serverUrl) throw new Error('未配置企业服务地址')
+    if (!this.token) throw new Error('登录已失效，请重新登录')
     const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) }
     if (this.token) headers.Authorization = `Bearer ${this.token}`
-    const response = await fetch(`${this.serverUrl}${path}`, { ...options, headers })
+    let response
+    try {
+      response = await fetch(`${this.serverUrl}${path}`, { ...options, headers })
+    } catch (error) {
+      throw new Error(`无法连接服务端，请检查服务器是否运行 (${error?.message || 'network error'})`)
+    }
     let payload = null
     try { payload = await response.json() } catch (_) {}
     if (!response.ok) {
@@ -56,6 +64,7 @@ export const enterpriseService = {
     const payload = await response.json().catch(() => null)
     if (!response.ok || !payload?.accessToken) throw new Error(payload?.error || '登录失败')
     localStorage.setItem(TOKEN_KEY, payload.accessToken)
+    window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { authenticated: true } }))
     return payload.user
   },
   async listNotes(filters = {}) {
