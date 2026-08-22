@@ -105,6 +105,20 @@
         </div>
       </div>
 
+      <!-- 企业服务 -->
+      <div class="settings-group">
+        <div class="group-title">企业服务</div>
+        <div class="group-content">
+          <div class="setting-item clickable" @click="goToEnterpriseSettings">
+            <div class="item-label-group">
+              <span class="item-label">服务器与账号</span>
+              <span class="item-hint">连接企业内网服务并同步数据</span>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+        </div>
+      </div>
+
       <!-- AI工具 -->
       <div class="settings-group">
         <div class="group-title">{{ t('settings.aiTools') }}</div>
@@ -1329,6 +1343,10 @@ const goToModelSettings = () => {
 
 const goToModuleSettings = () => {
   router.push('/settings/modules');
+};
+
+const goToEnterpriseSettings = () => {
+  router.push('/settings/enterprise');
 };
 
 // ========== 关于 / 功能介绍 / 帮助与反馈 ==========

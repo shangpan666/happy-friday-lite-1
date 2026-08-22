@@ -72,6 +72,11 @@ export const routes = [
     component: () => import('@/views/settings/SettingsModules.vue')
   },
   {
+    path: '/settings/enterprise',
+    name: 'settings-enterprise',
+    component: () => import('@/views/settings/EnterpriseSettings.vue')
+  },
+  {
     path: '/friday',
     name: 'friday',
     component: () => import('@/views/friday/FridayChat.vue')

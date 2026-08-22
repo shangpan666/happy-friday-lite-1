@@ -345,6 +345,42 @@ func (a *App) notesAPI(w http.ResponseWriter, r *http.Request, uid int64, id str
 		jsonOut(w, 200, map[string]any{"id": id, "title": in.Title, "content": in.Content, "contentText": in.ContentText})
 		return
 	}
+	if (r.Method == http.MethodPut || r.Method == http.MethodDelete) && id != "" {
+		if r.Method == http.MethodDelete {
+			res, err := a.db.Exec("DELETE FROM schedule_events WHERE id=? AND user_id=?", id, uid)
+			if err != nil {
+				jsonOut(w, 500, map[string]string{"error": err.Error()})
+				return
+			}
+			n, _ := res.RowsAffected()
+			if n == 0 {
+				jsonOut(w, 404, map[string]string{"error": "not found"})
+				return
+			}
+			w.WriteHeader(204)
+			return
+		}
+		var in struct {
+			Title, Start, End, Description string
+			Completed                      bool
+		}
+		if !readJSON(r, &in) {
+			jsonOut(w, 400, map[string]string{"error": "invalid body"})
+			return
+		}
+		res, err := a.db.Exec("UPDATE schedule_events SET title=?,start_at=?,end_at=?,description=?,completed=?,updated_at=? WHERE id=? AND user_id=?", in.Title, in.Start, in.End, in.Description, boolInt(in.Completed), time.Now().UTC().Format(time.RFC3339), id, uid)
+		if err != nil {
+			jsonOut(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			jsonOut(w, 404, map[string]string{"error": "not found"})
+			return
+		}
+		jsonOut(w, 200, map[string]any{"id": id, "title": in.Title, "start": in.Start, "end": in.End, "description": in.Description, "completed": in.Completed})
+		return
+	}
 	w.WriteHeader(405)
 }
 
