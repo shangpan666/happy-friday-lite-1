@@ -122,6 +122,7 @@
 <script setup>
 import { ref, computed, nextTick, onUnmounted, watch } from 'vue';
 import { electronService } from '@/services/electron';
+import { enterpriseService } from '@/services/enterprise';
 import UserMessage from '@/components/chat/UserMessage.vue';
 import AIMessage from '@/components/chat/AIMessage.vue';
 
@@ -361,7 +362,25 @@ async function sendChatMessage(text) {
 
   try {
     let result;
-    if (mode === 'chat') {
+    if (enterpriseService.enabled) {
+      const search = mode === 'chat'
+        ? await enterpriseService.searchKnowledge(text, props.kbCategoryId || '', props.topK || 5)
+        : { results: [] };
+      const context = (search?.results || []).map((item, index) => `[${index + 1}] ${item.content || ''}`).join('\n\n');
+      const messagesForModel = [
+        { role: 'system', content: context
+          ? `请根据以下知识库检索内容回答用户问题。若检索内容不足，请明确说明。\n\n${context}`
+          : '请直接回答用户问题。' },
+        ...messages.value.slice(0, -1).map(item => ({ role: item.role, content: item.content })),
+        { role: 'user', content: text }
+      ];
+      streamingContent.value = await enterpriseService.completeWithModel(plainModel, messagesForModel);
+      messages.value.push({ role: 'assistant', content: streamingContent.value, id: null });
+      isStreaming.value = false;
+      streamingContent.value = '';
+      scrollToBottom(true);
+      return;
+    } else if (mode === 'chat') {
       result = await electronService.invoke('chat_with_memory', {
         ...baseArgs,
         sessionId: currentSessionId || ''

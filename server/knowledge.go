@@ -135,7 +135,11 @@ func (a *App) searchKnowledge(w http.ResponseWriter, r *http.Request, uid int64)
 	}
 	q.SetQueryVector(fv)
 	q.SetTopK(in.TopK)
-	q.SetFilter(fmt.Sprintf("user_id = '%d'", uid))
+	filter := fmt.Sprintf("user_id = '%d'", uid)
+	if in.KBType != "" {
+		filter += fmt.Sprintf(" AND kb_type = '%s'", filterValue(in.KBType))
+	}
+	q.SetFilter(filter)
 	docs, err := db.Query(q)
 	if err != nil {
 		jsonOut(w, 500, map[string]string{"error": err.Error()})

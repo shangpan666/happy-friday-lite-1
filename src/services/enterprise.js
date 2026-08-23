@@ -82,12 +82,26 @@ export const enterpriseService = {
   async createScheduleEvent(event) { return this.request('/api/data/schedule-events', { method: 'POST', body: JSON.stringify(event) }) }
   ,async updateScheduleEvent(id, event) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(event) }) }
   ,async deleteScheduleEvent(id) { return this.request(`/api/data/schedule-events/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
-  async searchKnowledge(query, knowledgeBase) {
-    return this.request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query, knowledgeBase }) })
+  async searchKnowledge(query, kbType = '', topK = 5) {
+    return this.request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query, kbType, topK }) })
   },
   async indexKnowledge(payload) { return this.request('/api/knowledge/index', { method: 'POST', body: JSON.stringify(payload) }) },
   async getKnowledgeSummary(kbType = '') { const suffix = kbType ? `?kbType=${encodeURIComponent(kbType)}` : ''; return this.request(`/api/knowledge/summary${suffix}`) },
   async clearKnowledge(kbType) { return this.request('/api/knowledge/clear', { method: 'POST', body: JSON.stringify({ kbType }) }) },
+  async completeWithModel(model, messages) {
+    const baseUrl = String(model?.baseUrl || model?.baseURL || '').replace(/\/+$/, '')
+    const endpoint = /\/chat\/completions$/.test(baseUrl) ? baseUrl : `${baseUrl}/chat/completions`
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${model?.apiKey || ''}` },
+      body: JSON.stringify({ model: model?.modelName || model?.name, messages, stream: false })
+    })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `模型请求失败 (${response.status})`)
+    const content = payload?.choices?.[0]?.message?.content
+    if (!content) throw new Error('模型返回为空')
+    return content
+  },
   async listSessions() { return this.request('/api/data/sessions') },
   async getSessionMessages(id) { return this.request(`/api/data/messages/${encodeURIComponent(id)}`) },
   async updateSessionTitle(id, title) { return this.request(`/api/data/sessions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title }) }) },

@@ -1137,6 +1137,30 @@ export function registerCommands(mainWindow) {
     }
   })
 
+  // 仅负责读取和解析本地文档、切块；Embedding 与向量存储由服务端完成。
+  ipcMain.handle('rag-extract-chunks', async (_event, args) => {
+    const { filePath } = args || {}
+    if (!filePath) return { success: false, error: 'filePath required' }
+    try {
+      const { loadDocument } = await import('./rag/loaders.js')
+      const { splitDocuments } = await import('./rag/chunkers.js')
+      const rawDocs = await loadDocument(filePath, db)
+      const fileType = path.extname(filePath).toLowerCase().slice(1)
+      const { childDocs } = await splitDocuments(rawDocs, fileType)
+      return {
+        success: true,
+        chunks: childDocs.map((doc, index) => ({
+          id: `chunk-${index}`,
+          content: doc.pageContent || '',
+          metadata: { ...(doc.metadata || {}), source: filePath }
+        })).filter(chunk => chunk.content.trim())
+      }
+    } catch (e) {
+      console.error('[RAG] extract-chunks error:', e)
+      return { success: false, error: e.message }
+    }
+  })
+
   // 停止当前正在进行的索引任务（用户点击"停止"按钮）
   // 取消后队列会清理已插入的向量和状态记录
   ipcMain.handle('rag-stop-build-index', async () => {

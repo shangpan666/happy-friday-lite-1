@@ -79,7 +79,7 @@
   max_write_batch_group_size_bytes=1048576
   use_adaptive_mutex=false
   wal_filter=nullptr
-  create_if_missing=true
+  create_if_missing=false
   enforce_single_del_contracts=true
   allow_mmap_writes=false
   log_file_time_to_roll=0

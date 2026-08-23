@@ -407,21 +407,10 @@ function canBuildIndex(items) {
 
 // 右键"构建索引"：手动触发单个文件的向量化，弹窗显示进度
 async function buildRemoteIndex(file) {
-  const raw = await electronService.invoke('kb-read-file', { filePath: file.path });
-  if (!raw?.success) throw new Error(raw?.error || '无法读取文件内容');
-  const text = String(raw.content || '').trim();
-  if (!text) throw new Error('文件没有可索引的文本内容');
-  const chunkSize = 1200;
-  const overlap = 150;
-  const chunks = [];
-  for (let start = 0; start < text.length; start += chunkSize - overlap) {
-    const content = text.slice(start, start + chunkSize).trim();
-    if (content) chunks.push({
-      id: `${file.path}:${start}`,
-      content,
-      metadata: { title: file.name, fileType: file.type, source: file.path }
-    });
-  }
+  const extracted = await electronService.invoke('rag-extract-chunks', { filePath: file.path });
+  if (!extracted?.success) throw new Error(extracted?.error || '无法解析文件内容');
+  const chunks = extracted.chunks || [];
+  if (!chunks.length) throw new Error('文件没有可索引的文本内容');
   buildIndexState.phase = 'embedding';
   buildIndexState.currentChunk = 0;
   buildIndexState.totalChunks = chunks.length;

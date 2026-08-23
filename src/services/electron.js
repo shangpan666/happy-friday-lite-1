@@ -16,7 +16,7 @@ export const electronService = {
       if (!RAG_REMOTE.has(command)) { console.error(`Local data command '${command}' is disabled in enterprise mode`); return null }
       try {
         const { enterpriseService } = await import('./enterprise.js')
-        if (command === 'rag-search') return { success: true, ...(await enterpriseService.searchKnowledge(args?.query || '', args?.kbName || '')) }
+        if (command === 'rag-search') return { success: true, ...(await enterpriseService.searchKnowledge(args?.query || '', args?.kbCategoryId || '', args?.topK || 5)) }
         if (command === 'rag-get-kb-summary') return { success: true, ...(await enterpriseService.getKnowledgeSummary(args?.kbType || '')) }
         if (command === 'rag-clear-kb-index') return { success: true, ...(await enterpriseService.clearKnowledge(args?.kbType || '')) }
         if (command === 'rag-build-index') return { success: false, error: '请使用服务端索引接口提交文本块' }
