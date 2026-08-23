@@ -79,7 +79,6 @@
     "@langchain/textsplitters": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@mozilla/readability": "^0.6.0",
-    "@zvec/zvec": "^0.5.0",
     "adm-zip": "^0.5.17",
     "cheerio": "^1.2.0",
     "clsx": "2.1.1",
@@ -241,12 +240,7 @@
     "@deepseek-ai/node-addon-landlock-run-linux-x64": "0.1.1",
     "@deepseek-ai/schemastery": "3.18.1"
   },
-  "optionalDependencies": {
-    "@zvec/bindings-darwin-arm64": "^0.5.0",
-    "@zvec/bindings-linux-arm64": "^0.5.0",
-    "@zvec/bindings-linux-x64": "^0.5.0",
-    "@zvec/bindings-win32-x64": "^0.5.0"
-  },
+  "optionalDependencies": {},
   "devDependencies": {
     "@schedule-x/calendar": "^4.5.0",
     "@schedule-x/event-modal": "^4.5.0",

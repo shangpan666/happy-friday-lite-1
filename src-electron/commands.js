@@ -19,7 +19,6 @@ import {
 import { CONFIG_CHANGED, CHAT_DONE, CHAT_ERROR, SESSION_TITLE_UPDATED, NOTE_AI_DONE, NOTE_FIM_RESULT, BACKUP_PROGRESS } from './events.js'
 import { createBackup, restoreBackup } from './backup.js'
 import { cleanHistoryNow } from './historyClean.js'
-import { clearEmbeddingsCache } from './rag/embeddings.js'
 import { buildLlmMessage } from './attachmentContext.js'
 import { getUsageStats, clearUsage } from './usage.js'
 import { queryBalance } from './balance.js'
@@ -103,8 +102,6 @@ export function registerCommands(mainWindow) {
         return { success: false, error: 'Failed to enable runtime logs' }
       }
     }
-    // 模型配置变更时清除 Embedding 缓存
-    clearEmbeddingsCache()
     mainWindow.webContents.send(CONFIG_CHANGED, config)
     syncHarnessConfigurationIfRunning().catch(error => {
       console.warn('[Commands] Failed to sync Harness model config:', error.message)

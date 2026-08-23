@@ -85,6 +85,9 @@ export const enterpriseService = {
   async searchKnowledge(query, knowledgeBase) {
     return this.request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query, knowledgeBase }) })
   },
+  async indexKnowledge(payload) { return this.request('/api/knowledge/index', { method: 'POST', body: JSON.stringify(payload) }) },
+  async getKnowledgeSummary(kbType = '') { const suffix = kbType ? `?kbType=${encodeURIComponent(kbType)}` : ''; return this.request(`/api/knowledge/summary${suffix}`) },
+  async clearKnowledge(kbType) { return this.request('/api/knowledge/clear', { method: 'POST', body: JSON.stringify({ kbType }) }) },
   async listSessions() { return this.request('/api/data/sessions') },
   async getSessionMessages(id) { return this.request(`/api/data/messages/${encodeURIComponent(id)}`) },
   async updateSessionTitle(id, title) { return this.request(`/api/data/sessions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title }) }) },

@@ -233,6 +233,7 @@ import NewFolderDialog from './components/NewFolderDialog.vue';
 import CreateKbDialog from './components/CreateKbDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import { electronService } from '@/services/electron';
+import { enterpriseService } from '@/services/enterprise';
 import { useSidebar } from './composables/useSidebar';
 import { useFileSystem } from './composables/useFileSystem';
 import { useKnowledgeBase } from './composables/useKnowledgeBase';
@@ -405,7 +406,35 @@ function canBuildIndex(items) {
 }
 
 // 右键"构建索引"：手动触发单个文件的向量化，弹窗显示进度
-function handleBuildIndex() {
+async function buildRemoteIndex(file) {
+  const raw = await electronService.invoke('kb-read-file', { filePath: file.path });
+  if (!raw?.success) throw new Error(raw?.error || '无法读取文件内容');
+  const text = String(raw.content || '').trim();
+  if (!text) throw new Error('文件没有可索引的文本内容');
+  const chunkSize = 1200;
+  const overlap = 150;
+  const chunks = [];
+  for (let start = 0; start < text.length; start += chunkSize - overlap) {
+    const content = text.slice(start, start + chunkSize).trim();
+    if (content) chunks.push({
+      id: `${file.path}:${start}`,
+      content,
+      metadata: { title: file.name, fileType: file.type, source: file.path }
+    });
+  }
+  buildIndexState.phase = 'embedding';
+  buildIndexState.currentChunk = 0;
+  buildIndexState.totalChunks = chunks.length;
+  const result = await enterpriseService.indexKnowledge({
+    kbType: currentCategoryId.value,
+    source: file.path,
+    chunks
+  });
+  if (!result?.success) throw new Error(result?.error || '服务端索引失败');
+  buildIndexState.currentChunk = chunks.length;
+}
+
+async function handleBuildIndex() {
   const items = fileItemContextMenu.items.filter(item => !item.isDirectory && item.path);
   hideFileItemContextMenu();
   if (!items.length) return;
@@ -420,8 +449,15 @@ function handleBuildIndex() {
   buildIndexState.totalChunks = 0;
   buildIndexState.status = 'processing';
 
-  Promise.all(items.map(file => electronService.invoke('rag-build-index', { filePath: file.path })))
-    .catch(e => console.error('[RAG] build-index failed:', e));
+  try {
+    for (const file of items) await buildRemoteIndex(file);
+    buildIndexState.status = 'success';
+    buildIndexState.phase = 'done';
+  } catch (e) {
+    console.error('[RAG] remote build-index failed:', e);
+    buildIndexState.status = 'failed';
+    buildIndexState.phase = 'failed';
+  }
 }
 
 // 停止构建索引：取消当前任务，后端会清理已插入的向量
