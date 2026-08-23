@@ -1,0 +1,8 @@
+# Runtime database and vector indexes
+data/*
+
+# Local Zvec native headers and libraries
+native/*
+
+# Local build output
+happy-friday-server

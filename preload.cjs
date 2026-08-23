@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'history-set-config',
       'history-clean-now',
       'rag-build-index',
+      'rag-extract-chunks',
       'rag-stop-build-index',
       'rag-manual-update',
       'rag-get-file-status',

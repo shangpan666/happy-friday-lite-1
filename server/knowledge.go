@@ -102,6 +102,19 @@ func (a *App) indexKnowledge(w http.ResponseWriter, r *http.Request, uid int64) 
 	}
 	jsonOut(w, 200, map[string]any{"success": true, "count": n})
 }
+
+func readableChunk(content string) bool {
+	if strings.TrimSpace(content) == "" || strings.Contains(content, "%PDF-") || strings.Contains(content, "endobj") || strings.Contains(content, "FlateDecode") {
+		return false
+	}
+	control := 0
+	for _, r := range content {
+		if (r < 32 && r != '\n' && r != '\r' && r != '\t') || r == '\ufffd' {
+			control++
+		}
+	}
+	return control <= len([]rune(content))/20
+}
 func (a *App) searchKnowledge(w http.ResponseWriter, r *http.Request, uid int64) {
 	var in struct {
 		Query          string  `json:"query"`
@@ -153,7 +166,7 @@ func (a *App) searchKnowledge(w http.ResponseWriter, r *http.Request, uid int64)
 		m, _ := d.GetStringField("metadata")
 		var md map[string]any
 		_ = json.Unmarshal([]byte(m), &md)
-		if float64(d.GetScore()) >= in.ScoreThreshold {
+		if readableChunk(c) && float64(d.GetScore()) >= in.ScoreThreshold {
 			out = append(out, map[string]any{"source": s, "content": c, "metadata": md, "score": d.GetScore()})
 		}
 	}

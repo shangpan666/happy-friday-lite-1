@@ -81,7 +81,7 @@ func vectorInsert(db *zvec.Collection, uid int64, in indexRequest) (int, error) 
 	}
 	docs := make([]*zvec.Doc, 0, len(in.Chunks))
 	for _, c := range in.Chunks {
-		if strings.TrimSpace(c.Content) == "" {
+		if !readableChunk(c.Content) {
 			continue
 		}
 		// Zvec primary keys only accept its restricted identifier charset. The
